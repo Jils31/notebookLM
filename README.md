@@ -1,19 +1,28 @@
 # NotebookLM Lite
 
-NotebookLM Lite is a Retrieval-Augmented Generation (RAG) application that enables users to upload documents and interact with them conversationally. Instead of functioning as a generic chatbot, the system grounds its responses in the uploaded document itself, making it useful for research, studying, technical reading, and document exploration.
+NotebookLM Lite is a Retrieval-Augmented Generation (RAG) application that allows users to upload documents and interact with them conversationally.
 
-The project was built to explore practical GenAI system design using modern RAG architecture, vector databases, semantic retrieval, and grounded language model generation.
+Instead of behaving like a generic chatbot, the application grounds its responses in the uploaded document itself. Users can upload PDFs or text files, ask questions in natural language, and receive context-aware answers generated from semantically retrieved document chunks.
 
-Users can upload PDFs or text documents, ask questions in natural language, and receive context-aware answers backed by retrieved excerpts from the document.
+The project was built to explore practical GenAI system design using:
+
+- vector databases
+- semantic retrieval
+- embeddings
+- grounded prompting
+- production-style RAG pipelines 
+- conversational document interfaces
+
+The overall goal was to create a lightweight NotebookLM-inspired assistant capable of helping users study, summarize, analyze, and explore long-form documents.
 
 ---
 
 # Live Demo
 
-Add your deployment URL here.
+Add your deployment link here.
 
 ```text
-https://your-vercel-app.vercel.app
+https://notebook-lm-seven.vercel.app/
 ```
 
 ---
@@ -23,10 +32,10 @@ https://your-vercel-app.vercel.app
 ## Document Upload
 
 - Upload PDF documents
-- Upload plain text files
-- Drag-and-drop support
+- Upload TXT files
 - File validation and size limits
-- Automatic document parsing
+- Automatic text extraction
+- Page-aware metadata handling
 
 ---
 
@@ -35,42 +44,23 @@ https://your-vercel-app.vercel.app
 - Semantic chunk retrieval
 - Vector similarity search
 - Context-grounded responses
-- Source-aware answers
 - Reduced hallucinations
+- Multi-turn conversational retrieval
 
 ---
 
 ## Conversational Document Chat
 
-- Multi-turn conversations
-- Chat history support
-- Persistent document context
-- NotebookLM-inspired interaction style
+Users can:
 
----
+- ask questions about documents
+- summarize papers
+- request explanations
+- generate insights
+- understand technical concepts
+- explore ideas conversationally
 
-## Source Citations
-
-Each response includes:
-
-- Retrieved supporting excerpts
-- Page references
-- Source snippets
-
-This improves answer transparency and helps users verify generated responses.
-
----
-
-## Session Persistence
-
-The application preserves:
-
-- Uploaded document session
-- Chat history
-- File metadata
-- Retrieval context
-
-Sessions remain available even after page refreshes using local storage.
+The assistant behaves more like a research companion than a traditional extractive QA system.
 
 ---
 
@@ -81,33 +71,18 @@ Sessions remain available even after page refreshes using local storage.
 | Frontend | Next.js App Router, React, Tailwind CSS |
 | Backend | Next.js API Routes |
 | Vector Database | Qdrant Cloud |
-| Embeddings | HuggingFace Transformers |
-| Embedding Model | Xenova/all-MiniLM-L6-v2 |
-| LLM Provider | OpenRouter |
-| Language Models | Mistral Nemo / Llama 3.1 |
+| Embeddings | HuggingFace Inference API |
+| Embedding Model | sentence-transformers/all-MiniLM-L6-v2 |
+| LLM Provider | Groq |
+| Language Model | llama-3.3-70b-versatile |
 | RAG Framework | LangChain |
-| PDF Parsing | LangChain WebPDFLoader |
+| PDF Parsing | WebPDFLoader |
 | Session Persistence | localStorage |
+| Deployment | Vercel |
 
 ---
 
-# Project Goal
-
-The primary goal of this project was to build a production-style RAG pipeline capable of:
-
-- understanding uploaded documents
-- retrieving relevant semantic context
-- generating grounded answers
-- reducing hallucinations
-- supporting conversational exploration of long-form content
-
-The system was intentionally designed to mimic the behavior of tools like NotebookLM while remaining lightweight and fully customizable.
-
----
-
-# System Architecture
-
-## High-Level Architecture
+# High-Level Architecture
 
 ```text
                 ┌────────────────────┐
@@ -130,7 +105,7 @@ The system was intentionally designed to mimic the behavior of tools like Notebo
                           ▼
                 ┌────────────────────┐
                 │ Embedding Creation │
-                │ HuggingFace Model  │
+                │ HuggingFace API    │
                 └─────────┬──────────┘
                           │
                           ▼
@@ -158,14 +133,14 @@ The system was intentionally designed to mimic the behavior of tools like Notebo
                           │
                           ▼
                 ┌────────────────────┐
-                │ OpenRouter LLM     │
-                │ Response Generation│
+                │ Groq LLM Inference │
+                │ Llama 3.3 70B      │
                 └─────────┬──────────┘
                           │
                           ▼
                 ┌────────────────────┐
-                │ Final Answer +     │
-                │ Citations          │
+                │ Final Grounded     │
+                │ Answer + Citations │
                 └────────────────────┘
 ```
 
@@ -175,12 +150,12 @@ The system was intentionally designed to mimic the behavior of tools like Notebo
 
 # 1. Document Upload
 
-The application accepts:
+The application supports:
 
-- PDF files
+- PDF documents
 - TXT files
 
-Maximum supported size:
+Maximum file size:
 
 ```text
 15 MB
@@ -189,92 +164,66 @@ Maximum supported size:
 When a file is uploaded:
 
 1. The file is validated
-2. PDF pages are parsed
-3. Raw text is extracted
-4. Documents are converted into LangChain document objects
+2. Text is extracted
+3. PDF pages are parsed
+4. Metadata is attached
+5. Documents are converted into LangChain documents
 
-PDFs are parsed using:
+PDF parsing is handled using:
 
 ```text
 WebPDFLoader
 ```
 
-TXT files are converted into a single document with metadata.
+TXT files are converted into a single document object.
 
 ---
 
 # 2. Chunking Strategy
 
-After extraction, the text is split into smaller semantic chunks.
+After extraction, the document text is split into semantic chunks.
 
-The application uses:
+The project uses:
 
 ```text
 RecursiveCharacterTextSplitter
 ```
 
+---
+
 ## Configuration
 
 | Parameter | Value |
 |---|---|
-| chunkSize | 1000 |
-| chunkOverlap | 200 |
+| chunkSize | 1500 |
+| chunkOverlap | 100 |
 | separators | ["\n\n", "\n", ". ", " ", ""] |
 
 ---
 
-## Why Chunking Matters
+## Why Chunking Is Necessary
 
-Language models cannot process entire large documents efficiently within context windows.
+Large documents cannot fit entirely into an LLM context window efficiently.
 
-Chunking helps by:
+Chunking allows:
 
-- reducing token load
-- improving retrieval quality
-- preserving semantic meaning
-- enabling scalable search
-
----
-
-## Why This Specific Strategy?
-
-### chunkSize = 1000
-
-Large enough to:
-
-- preserve coherent thoughts
-- retain paragraph-level meaning
-- improve retrieval accuracy
-
-Small enough to:
-
-- fit multiple chunks into prompt context
-- avoid unnecessary token usage
+- scalable retrieval
+- semantic indexing
+- efficient prompting
+- lower token usage
+- improved retrieval precision
 
 ---
 
-### chunkOverlap = 200
+## Separator Hierarchy
 
-Overlap prevents information loss between chunk boundaries.
-
-For example:
-
-- if a sentence spans two chunks
-- overlapping ensures at least one chunk still contains complete context
-
-This significantly improves retrieval consistency.
-
----
-
-### Separator Hierarchy
-
-The splitter prioritizes:
+Chunks are split in this order:
 
 ```text
 Paragraph → Line → Sentence → Word → Character
 ```
 
-This preserves natural text structure as much as possible.
+This preserves natural document structure as much as possible.
 
 ---
 
@@ -285,74 +234,61 @@ Each chunk is converted into a vector embedding.
 The project uses:
 
 ```text
-Xenova/all-MiniLM-L6-v2
+sentence-transformers/all-MiniLM-L6-v2
 ```
 
-through HuggingFace Transformers.
-
----
-
-## Why Local Embeddings?
-
-Initially, external embedding APIs were considered.
-
-The system was later migrated to local HuggingFace embeddings because they provide:
-
-- no API cost
-- no rate limits
-- better development stability
-- faster iteration
-- offline capability
+through the HuggingFace Inference API.
 
 ---
 
 ## Embedding Dimensions
 
-The model generates:
+The embedding model generates:
 
 ```text
 384-dimensional vectors
 ```
 
-These vectors are optimized for semantic similarity search.
+optimized for semantic similarity search.
 
 ---
 
 # 4. Vector Database
 
-The generated embeddings are stored in:
+Generated embeddings are stored inside:
 
 ```text
 Qdrant Cloud
 ```
 
-Qdrant is used because it provides:
+Qdrant was chosen because it provides:
 
 - fast vector similarity search
 - scalable retrieval
+- metadata filtering
 - cloud-hosted persistence
-- simple API integration
-- excellent LangChain compatibility
+- strong LangChain integration
+- beginner-friendly APIs
 
 ---
 
 ## Collection Design
 
-Each uploaded document gets its own isolated collection.
+Every uploaded document gets its own isolated collection.
 
 Example:
 
 ```text
-doc_x82Ka91
+doc_a82Kx91
 ```
 
-This design prevents:
+This prevents:
 
-- cross-document contamination
 - retrieval leakage
-- mixed-context answers
+- cross-document contamination
+- mixed-context responses
 
-and makes session-level retrieval clean and predictable.
+and keeps retrieval clean and session-specific.
 
 ---
 
@@ -361,53 +297,37 @@ and makes session-level retrieval clean and predictable.
 When a user asks a question:
 
 1. The query is embedded
-2. Qdrant performs vector similarity search
-3. Relevant chunks are retrieved
+2. Qdrant performs similarity search
+3. Top matching chunks are retrieved
 4. Retrieved context is injected into the prompt
 
-The retriever currently uses:
+Current retrieval depth:
 
 ```text
 Top 8 chunks
 ```
 
-instead of smaller retrieval depth.
-
----
-
-## Why Increase Retrieval Depth?
-
-Using more retrieved chunks improves:
-
-- summarization
-- broad context understanding
-- conceptual synthesis
-- document-wide reasoning
-- multi-section question answering
-
-This creates a more NotebookLM-like interaction style.
-
 ---
 
 # 6. Prompt Engineering
 
-The prompting strategy is designed to balance:
+The system prompt was carefully designed to balance:
 
 ```text
-Grounding + intelligent synthesis
+strict grounding + intelligent synthesis
 ```
 
 instead of behaving like a rigid extractive QA system.
 
 ---
 
-## Prompt Responsibilities
+## Assistant Responsibilities
 
 The assistant is instructed to:
 
 - answer using retrieved context
 - summarize information
-- explain concepts
+- explain concepts clearly
 - synthesize across excerpts
 - infer carefully when strongly supported
 - avoid unsupported hallucinations
@@ -416,21 +336,19 @@ The assistant is instructed to:
 
 ## Prompt Philosophy
 
-The system intentionally avoids:
+Instead of forcing the assistant to:
 
 ```text
 answer ONLY from context
 ```
 
-because that creates overly robotic behavior.
-
-Instead, it behaves more like:
+it behaves more like:
 
 ```text
 an intelligent research assistant grounded in the document
 ```
 
-This produces significantly better user experience.
+This significantly improves usability and conversational quality.
 
 ---
 
@@ -439,82 +357,25 @@ This produces significantly better user experience.
 The application uses:
 
 ```text
-OpenRouter
+Groq
 ```
 
-as the inference provider.
+for inference.
 
 ---
 
-## Why OpenRouter?
-
-OpenRouter was chosen because it provides:
-
-- OpenAI-compatible APIs
-- access to multiple models
-- provider flexibility
-- easy experimentation
-- lower integration overhead
-
----
-
-## Current Recommended Models
-
-### Mistral Nemo
+## Current Model
 
 ```text
-mistralai/mistral-nemo
+llama-3.3-70b-versatile
 ```
 
-Used for:
+This model was selected because it provides:
 
-- fast inference
-- stable responses
-- strong RAG performance
-- long-context handling
-
----
-
-### Llama 3.1 70B
-
-```text
-meta-llama/llama-3.1-70b-instruct
-```
-
-Used when:
-
-- higher reasoning quality is required
-- latency is less important
-- synthesis quality matters more
-
----
-
-# Session Persistence
-
-Initially, refreshing the browser caused:
-
-- uploaded documents to disappear
-- chat history to reset
-- session IDs to be lost
-
-This problem was solved using:
-
-```text
-localStorage
-```
-
----
-
-## Persisted State
-
-The frontend now stores:
-
-- session metadata
-- uploaded file information
-- conversation history
-- retrieval context references
-
-This allows users to refresh the browser without losing progress.
+- strong reasoning quality
+- fast inference speed
+- excellent conversational performance
+- high-quality RAG responses
 
 ---
 
@@ -528,6 +389,8 @@ This allows users to refresh the browser without losing progress.
 POST
 ```
 
+---
+
 ## Input
 
 ```text
@@ -540,7 +403,7 @@ Field:
 file
 ```
 
-Supported:
+Supported formats:
 
 - PDF
 - TXT
@@ -581,6 +444,8 @@ The route performs:
 POST
 ```
 
+---
+
 ## Input
 
 ```json
@@ -597,7 +462,7 @@ POST
 
 The route performs:
 
-1. vector retrieval
+1. semantic retrieval
 2. prompt construction
 3. grounded generation
 4. citation preparation
@@ -623,7 +488,11 @@ The route performs:
 
 # Frontend Experience
 
-The frontend was designed to remain minimal and document-focused.
+The frontend was intentionally designed to remain:
+
+- minimal
+- document-focused
+- distraction-free
 
 ---
 
@@ -631,12 +500,12 @@ The frontend was designed to remain minimal and document-focused.
 
 - drag-and-drop uploads
 - conversational interface
-- citation rendering
+- source citations
+- loading states
 - responsive layout
-- loading indicators
 - error handling
-- session persistence
 - auto-scrolling chat
+- persistent sessions
 
 ---
 
@@ -671,7 +540,9 @@ Create:
 Add:
 
 ```env
-OPENROUTER_API_KEY=your_openrouter_key
+GROQ_API_KEY=your_groq_key
+
+HUGGINGFACE_API_KEY=your_hf_key
 
 QDRANT_URL=https://your-cluster.qdrant.io
 
@@ -685,7 +556,7 @@ QDRANT_API_KEY=your_qdrant_api_key
 # 1. Install Dependencies
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 ---
@@ -708,7 +579,11 @@ http://localhost:3000
 
 # Deployment
 
-The project can be deployed directly to Vercel.
+The project is designed to be deployed on:
+
+```text
+Vercel
+```
 
 ---
 
@@ -723,69 +598,51 @@ The project can be deployed directly to Vercel.
 
 # Challenges Faced During Development
 
-## 1. Gemini API Access Issues
+## 1. Gemini API Restrictions
 
-Initially, the project used Gemini APIs.
+Initial versions used Gemini APIs.
 
-Several issues appeared:
+Issues encountered:
 
 - unsupported model access
 - API permission errors
-- provider restrictions
+- project-level restrictions
 - unstable embedding endpoints
 
-The architecture was later migrated to:
+---
 
-- OpenRouter for generation
-- local HuggingFace embeddings
+## 2. OpenRouter Instability
 
-which significantly improved stability.
+OpenRouter introduced:
+
+- provider instability
+- missing free endpoints
+- rate limits
+- inconsistent model availability
 
 ---
 
-## 2. Retrieval Quality
+## 3. Local HuggingFace Deployment Issues
 
-Early retrieval quality was inconsistent because:
+Running local transformers caused:
 
-- retrieval depth was low
-- prompts were too restrictive
+- ONNX runtime failures
+- missing native libraries
+- Vercel serverless incompatibility
 
-Increasing retrieval depth and redesigning the system prompt improved:
-
-- summarization quality
-- conversational flow
-- contextual synthesis
+This led to migration toward hosted inference APIs.
 
 ---
 
-## 3. Session Persistence
+## 4. Session Persistence Problems
 
 Refreshing the page initially cleared:
 
-- document state
+- uploaded documents
 - chat history
-- retrieval session
+- retrieval sessions
 
-This was solved using localStorage persistence.
-
----
-
-# Future Improvements
-
-Potential upgrades planned for the system:
-
-- URL-based notebook routing
-- streaming responses
-- hybrid retrieval
-- keyword + semantic search
-- OCR support
-- multi-document chat
-- citation highlighting
-- PDF preview integration
-- memory optimization
-- agentic retrieval workflows
-- document summarization mode
-- collaborative notebooks
+This was solved using browser persistence.
 
 ---
 
@@ -798,29 +655,37 @@ This project provided hands-on experience with:
 - semantic embeddings
 - prompt engineering
 - LangChain workflows
-- production-style GenAI architecture
-- conversational AI systems
-- grounded response generation
-- session persistence design
 - scalable retrieval pipelines
+- conversational AI systems
+- grounded generation
+- serverless deployment
+- production-style GenAI architecture
 
 ---
 
 # Conclusion
 
-NotebookLM Lite demonstrates how modern GenAI systems can move beyond generic chatbot behavior and become document-aware research assistants.
+NotebookLM Lite demonstrates how modern AI systems can move beyond generic chatbot behavior and become document-aware research assistants.
 
 The project combines:
 
 - semantic retrieval
-- vector search
+- vector similarity search
 - grounded prompting
 - conversational interfaces
 - persistent context
+- scalable RAG architecture
 
-to create an experience centered around understanding and interacting with knowledge.
+into a system focused on helping users understand and interact with knowledge more effectively.
 
-Rather than treating the language model as the source of truth, the architecture treats the uploaded document as the primary knowledge source and uses the model as a reasoning and explanation layer on top of retrieved context.
+Rather than treating the language model as the sole source of truth, the application treats the uploaded document as the primary knowledge source while the LLM acts as the reasoning and explanation layer.
 
-This grounding-first approach significantly improves reliability, explainability, and user trust in generated responses.
+This grounding-first approach significantly improves:
+
+- reliability
+- explainability
+- transparency
+- user trust
+
+and represents one of the core ideas behind modern Retrieval-Augmented Generation systems.
 
