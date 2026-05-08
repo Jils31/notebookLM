@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { getRetriever } from "@/lib/rag";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const SYSTEM_PROMPT = `
 You are an intelligent document research assistant similar to NotebookLM.
@@ -63,13 +63,13 @@ export async function POST(request) {
 
     const collectionName = `doc_${sessionId}`;
 
-    const retriever = await getRetriever(collectionName, 4);
+    const retriever = await getRetriever(collectionName, 8);
 
     const chunks = await retriever.invoke(question);
 
     const client = new OpenAI({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
     });
 
     const messages = [
@@ -81,21 +81,11 @@ export async function POST(request) {
       { role: "user", content: question },
     ];
 
-let response;
-
-try {
-  response = await client.chat.completions.create({
-    model: "meta-llama/llama-3.1-8b-instruct",
-    messages,
-    temperature: 0.1,
-  });
-} catch (err) {
-  response = await client.chat.completions.create({
-    model: "deepseek/deepseek-r1:free",
-    messages,
-    temperature: 0.1,
-  });
-}
+    const response = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      temperature: 0.1,
+    });
 
     const answer = response.choices[0]?.message?.content ?? "";
 
