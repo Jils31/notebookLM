@@ -1,65 +1,298 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
+  const [session, setSession] = useState(null); // { sessionId, fileName, pages, chunks }
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  const [messages, setMessages] = useState([]); // { role, content, citations? }
+  const [input, setInput] = useState("");
+  const [asking, setAsking] = useState(false);
+  const fileInputRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, asking]);
+
+  useEffect(() => {
+  const savedSession = localStorage.getItem("notebook-session");
+
+  if (savedSession) {
+    setSession(JSON.parse(savedSession));
+  }
+
+  const savedMessages = localStorage.getItem("notebook-messages");
+
+  if (savedMessages) {
+    setMessages(JSON.parse(savedMessages));
+  }
+}, []);
+
+useEffect(() => {
+  if (session) {
+    localStorage.setItem(
+      "notebook-session",
+      JSON.stringify(session)
+    );
+  }
+}, [session]);
+
+useEffect(() => {
+  localStorage.setItem(
+    "notebook-messages",
+    JSON.stringify(messages)
+  );
+}, [messages]);
+
+  async function handleUpload(file) {
+    if (!file) return;
+    setUploadError("");
+    setUploading(true);
+    setMessages([]);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/ingest", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setSession(data);
+    } catch (err) {
+      setUploadError(err.message);
+      setSession(null);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleAsk(e) {
+    e.preventDefault();
+    const q = input.trim();
+    if (!q || !session || asking) return;
+    setInput("");
+    const next = [...messages, { role: "user", content: q }];
+    setMessages(next);
+    setAsking(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          question: q,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to get answer");
+      setMessages([
+        ...next,
+        { role: "assistant", content: data.answer, citations: data.citations },
+      ]);
+    } catch (err) {
+      setMessages([
+        ...next,
+        { role: "assistant", content: `Error: ${err.message}`, error: true },
+      ]);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+function reset() {
+  setSession(null);
+  setMessages([]);
+  setUploadError("");
+
+  localStorage.removeItem("notebook-session");
+  localStorage.removeItem("notebook-messages");
+
+  if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+  }
+}
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+      <header className="border-b border-zinc-200 dark:border-zinc-800 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">NotebookLM Lite</h1>
+          <p className="text-xs text-zinc-500">RAG-powered Q&A grounded in your document</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        {session && (
+          <button
+            onClick={reset}
+            className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 underline"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            Upload a different document
+          </button>
+        )}
+      </header>
+
+      <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6">
+        {!session ? (
+          <UploadPanel
+            uploading={uploading}
+            error={uploadError}
+            onUpload={handleUpload}
+            inputRef={fileInputRef}
+          />
+        ) : (
+          <>
+            <SessionBanner session={session} />
+            <div
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto space-y-4 py-4"
+            >
+              {messages.length === 0 && <EmptyChatHint fileName={session.fileName} />}
+              {messages.map((m, i) => (
+                <Message key={i} message={m} />
+              ))}
+              {asking && (
+                <div className="text-sm text-zinc-500 italic">Thinking…</div>
+              )}
+            </div>
+            <form
+              onSubmit={handleAsk}
+              className="flex gap-2 border-t border-zinc-200 dark:border-zinc-800 pt-3"
+            >
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a question about your document…"
+                className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={asking}
+              />
+              <button
+                type="submit"
+                disabled={asking || !input.trim()}
+                className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white text-sm font-medium px-4 py-2"
+              >
+                Ask
+              </button>
+            </form>
+          </>
+        )}
       </main>
+
+      <footer className="text-center text-xs text-zinc-400 py-4">
+        Built with Next.js · OpenAI · Qdrant
+      </footer>
+    </div>
+  );
+}
+
+function UploadPanel({ uploading, error, onUpload, inputRef }) {
+  const [dragActive, setDragActive] = useState(false);
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div
+        className={`w-full max-w-lg rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+          dragActive
+            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+            : "border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragActive(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) onUpload(file);
+        }}
+      >
+        <h2 className="text-xl font-semibold mb-2">Upload a document</h2>
+        <p className="text-sm text-zinc-500 mb-6">
+          Drop a PDF or .txt file here, or click below. Up to 15&nbsp;MB.
+        </p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.txt,application/pdf,text/plain"
+          className="hidden"
+          onChange={(e) => onUpload(e.target.files?.[0])}
+          disabled={uploading}
+        />
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white text-sm font-medium px-5 py-2.5"
+        >
+          {uploading ? "Indexing… this can take ~30s" : "Choose file"}
+        </button>
+        {error && (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SessionBanner({ session }) {
+  return (
+    <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-3 text-sm flex items-center justify-between">
+      <div className="truncate">
+        <span className="font-medium">{session.fileName}</span>
+        <span className="text-zinc-500 ml-2">
+          {session.pages} {session.pages === 1 ? "page" : "pages"} · {session.chunks} chunks
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function EmptyChatHint({ fileName }) {
+  return (
+    <div className="text-sm text-zinc-500 py-8 text-center">
+      Ask a question about <span className="font-medium">{fileName}</span> to get started.
+    </div>
+  );
+}
+
+function Message({ message }) {
+  const isUser = message.role === "user";
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+          isUser
+            ? "bg-blue-600 text-white"
+            : message.error
+            ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900"
+            : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+        }`}
+      >
+        <div>{message.content}</div>
+        {!isUser && message.citations?.length > 0 && (
+          <details className="mt-3 text-xs">
+            <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
+              Sources ({message.citations.length})
+            </summary>
+            <div className="mt-2 space-y-2">
+              {message.citations.map((c, i) => (
+                <div
+                  key={i}
+                  className="rounded-md bg-zinc-50 dark:bg-zinc-800 p-2 border border-zinc-200 dark:border-zinc-700"
+                >
+                  <div className="text-zinc-500 mb-1">
+                    Page {c.page ?? "?"}
+                  </div>
+                  <div className="text-zinc-700 dark:text-zinc-300 line-clamp-3">
+                    {c.snippet}…
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

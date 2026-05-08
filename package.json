@@ -9,7 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@huggingface/transformers": "^4.2.0",
+    "@langchain/community": "^1.1.28",
+    "@langchain/core": "^1.1.45",
+    "@langchain/google-genai": "^2.1.30",
+    "@langchain/openai": "^1.4.5",
+    "@langchain/qdrant": "^1.0.2",
+    "@langchain/textsplitters": "^1.0.1",
+    "@xenova/transformers": "^2.17.2",
+    "dotenv": "^17.4.2",
+    "nanoid": "^5.1.11",
     "next": "16.2.5",
+    "openai": "^4.104.0",
+    "pdf-parse": "^1.1.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
