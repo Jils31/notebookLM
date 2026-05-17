@@ -91,7 +91,12 @@ useEffect(() => {
       if (!res.ok) throw new Error(data.error || "Failed to get answer");
       setMessages([
         ...next,
-        { role: "assistant", content: data.answer, citations: data.citations },
+        {
+          role: "assistant",
+          content: data.answer,
+          citations: data.citations,
+          rag: data.rag,
+        },
       ]);
     } catch (err) {
       setMessages([
@@ -270,6 +275,7 @@ function Message({ message }) {
         }`}
       >
         <div>{message.content}</div>
+        {!isUser && message.rag && <RagBadges rag={message.rag} />}
         {!isUser && message.citations?.length > 0 && (
           <details className="mt-3 text-xs">
             <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
@@ -293,6 +299,40 @@ function Message({ message }) {
           </details>
         )}
       </div>
+    </div>
+  );
+}
+
+function RagBadges({ rag }) {
+  const rewritten =
+    rag.rewrittenQuery &&
+    rag.originalQuery &&
+    rag.rewrittenQuery.trim().toLowerCase() !==
+      rag.originalQuery.trim().toLowerCase();
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+      {rewritten && (
+        <span
+          className="rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-2 py-0.5"
+          title={`Original: ${rag.originalQuery}`}
+        >
+          rewritten → “{rag.rewrittenQuery}”
+        </span>
+      )}
+      {Array.isArray(rag.variants) && rag.variants.length > 0 && (
+        <span
+          className="rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2 py-0.5"
+          title={rag.variants.join(" · ")}
+        >
+          +{rag.variants.length} query variants
+        </span>
+      )}
+      {typeof rag.retrieved === "number" && (
+        <span className="rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2 py-0.5">
+          judge kept {rag.kept}/{rag.retrieved} chunks
+        </span>
+      )}
     </div>
   );
 }

@@ -379,6 +379,87 @@ This model was selected because it provides:
 
 ---
 
+# Advanced RAG — Corrective RAG (CRAG) Pipeline
+
+A naive RAG pipeline embeds the user's question, fetches top-k chunks, and shoves them at the LLM. Two failure modes hurt it badly:
+
+1. **Typos and vague phrasing** — the embedding for `"explan debging in nodejs"` does not land near anything useful in vector space.
+2. **Irrelevant chunks** — even on a clean query, similarity search returns chunks that *look* close in vector space but actually don't answer the question. The LLM then either hallucinates around them or gets distracted.
+
+This project layers a **Corrective RAG (CRAG)** pipeline on top of the baseline retrieval to fix both. Three extra steps wrap around the standard retrieve → generate flow:
+
+```text
+                ┌─────────────────────────┐
+                │ User query (raw)        │
+                └────────────┬────────────┘
+                             ▼
+              ┌──────────────────────────────┐
+              │ STEP 1 — Query Rewriter      │   ← SLM: llama-3.1-8b-instant
+              │   • Fix typos                │     (~200 ms)
+              │   • Expand abbreviations     │
+              │   • Generate 2 paraphrases   │
+              └──────────────┬───────────────┘
+                             ▼
+              ┌──────────────────────────────┐
+              │ STEP 2 — Multi-query Retrieve│   ← parallel Qdrant calls
+              │   • k = 6 per query          │     (3 queries, deduped)
+              │   • Dedupe across variants   │
+              └──────────────┬───────────────┘
+                             ▼
+              ┌──────────────────────────────┐
+              │ STEP 3 — Relevance Judge     │   ← SLM: llama-3.1-8b-instant
+              │   • Grade every chunk:       │     (1 batched call)
+              │     relevant / ambiguous /   │
+              │     irrelevant               │
+              │   • Drop irrelevant ones     │
+              └──────────────┬───────────────┘
+                             ├──► kept = 0  → "I couldn't find that…"
+                             ▼
+              ┌──────────────────────────────┐
+              │ STEP 4 — Generator           │   ← LLM: llama-3.3-70b-versatile
+              │   • Grounded answer          │     (final response)
+              │   • Page-numbered citations  │
+              └──────────────────────────────┘
+```
+
+## Why this is "Corrective"
+
+CRAG, as described in the original paper, is about **adding a verification step between retrieval and generation** so the generator only ever sees high-confidence context. Standard CRAG also falls back to web search when retrieval fails, but that fallback is intentionally **disabled here** — the assignment requires answers grounded in the uploaded document only. Our fallback is the honest "I couldn't find that in the document" message instead of a hallucinated answer.
+
+## Two-model split (SLM + LLM)
+
+| Stage             | Model                          | Why                                                                 |
+| ----------------- | ------------------------------ | ------------------------------------------------------------------- |
+| Query rewriting   | `llama-3.1-8b-instant` (Groq)  | Cheap, fast, more than smart enough to fix typos + paraphrase       |
+| Relevance judging | `llama-3.1-8b-instant` (Groq)  | Same — graders don't need 70B reasoning, just literal comparison    |
+| Final generation  | `llama-3.3-70b-versatile` (Groq) | Reserve the big model for the part the user actually reads        |
+
+This keeps total latency around 3–4 s while spending ~95 % of the token budget on the step that matters: the final answer.
+
+## What the user sees
+
+Every assistant message in the chat surfaces the CRAG metadata as badges:
+
+- `rewritten → "…"` — appears only if the rewriter actually changed the query
+- `+N query variants` — hover to see the paraphrases that were also searched
+- `judge kept X/Y chunks` — how aggressively the judge filtered retrieval noise
+
+This makes the corrective behavior **visible** instead of an invisible backend trick — the user (and the grader) can see exactly why the answer is grounded.
+
+## File map for the CRAG layer
+
+```text
+lib/
+  queryRewriter.js   ← Step 1: SLM-based query cleanup + paraphrase generation
+  judge.js           ← Step 3: SLM-based per-chunk relevance grading
+  rag.js             ← embeddings + Qdrant retriever (shared)
+
+app/api/chat/route.js  ← Orchestrates all 4 steps, returns { answer, citations, rag }
+app/page.js            ← RagBadges component renders the metadata
+```
+
+---
+
 # API Design
 
 # /api/ingest
@@ -480,7 +561,15 @@ The route performs:
       "page": 2,
       "snippet": "..."
     }
-  ]
+  ],
+  "rag": {
+    "originalQuery": "explan debging in nodejs",
+    "rewrittenQuery": "How do you perform debugging in Node.js?",
+    "variants": ["...", "..."],
+    "retrieved": 14,
+    "kept": 6,
+    "dropped": 8
+  }
 }
 ```
 
@@ -524,7 +613,9 @@ app/
       route.js
 
 lib/
-  rag.js
+  rag.js              ← embeddings + Qdrant retriever
+  queryRewriter.js    ← CRAG step 1: typo fix + multi-query
+  judge.js            ← CRAG step 3: LLM-as-judge relevance grading
 ```
 
 ---
